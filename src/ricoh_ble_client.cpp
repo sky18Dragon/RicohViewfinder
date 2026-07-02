@@ -13,6 +13,8 @@
 #include <NimBLEClient.h>
 #include <NimBLEConnInfo.h>
 #include <NimBLEDevice.h>
+#include <NimBLERemoteCharacteristic.h>
+#include <NimBLERemoteService.h>
 #include <NimBLEScan.h>
 #include <NimBLEUUID.h>
 #include <esp_heap_caps.h>
@@ -39,9 +41,32 @@ std::atomic<int> g_powerOffDisconnectReason{0};
 std::atomic<int> g_powerStateNotifyValue{-1};
 std::atomic<bool> g_powerOffNotifyPending{false};
 
+constexpr uint8_t RICOH_SHOOTING_FLAVOR_IMMEDIATE = 0x00;
+constexpr uint8_t RICOH_OPERATION_START = 0x01;
+constexpr uint8_t RICOH_OPERATION_PARAM_NO_AF = 0x00;
+constexpr uint8_t RICOH_OPERATION_PARAM_AF = 0x01;
+
 bool isPowerOffDisconnectReason(int reason) {
   return reason == RICOH_BLE_DISCONNECT_REMOTE_USER ||
          reason == RICOH_BLE_DISCONNECT_REMOTE_POWER_OFF;
+}
+
+const char* ricohOperationModeName(RicohCameraOperationMode mode) {
+  switch (mode) {
+    case RicohCameraOperationMode::Capture:
+      return "CAPTURE";
+    case RicohCameraOperationMode::Playback:
+      return "PLAYBACK";
+    case RicohCameraOperationMode::BleStartup:
+      return "BLE_STARTUP";
+    case RicohCameraOperationMode::Other:
+      return "OTHER";
+    case RicohCameraOperationMode::PowerOffTransfer:
+      return "POWER_OFF_TRANSFER";
+    case RicohCameraOperationMode::Unknown:
+      return "UNKNOWN";
+  }
+  return "UNKNOWN";
 }
 
 int ricohGapEventHandler(ble_gap_event* event, void*) {
@@ -717,6 +742,43 @@ bool readHandleWithResponse(NimBLEClient* client, uint16_t handle, std::vector<u
   return readHandleOnce(client, handle, false, value, errorOut);
 }
 
+NimBLERemoteCharacteristic* writableCharacteristic(NimBLERemoteService* service,
+                                                   const char* uuid,
+                                                   const char* label,
+                                                   String& errorOut) {
+  if (service == nullptr) {
+    errorOut = "BLE shooting service unavailable";
+    return nullptr;
+  }
+
+  NimBLERemoteCharacteristic* characteristic = service->getCharacteristic(NimBLEUUID(uuid));
+  if (characteristic == nullptr || !characteristic->canWrite()) {
+    errorOut = String("BLE ") + label + " unavailable";
+    return nullptr;
+  }
+  errorOut = "";
+  return characteristic;
+}
+
+bool writeCharacteristicValue(NimBLERemoteCharacteristic* characteristic,
+                              const uint8_t* payload,
+                              size_t length,
+                              const char* label,
+                              String& errorOut) {
+  if (characteristic == nullptr || payload == nullptr || length == 0) {
+    errorOut = String("BLE ") + label + " invalid write";
+    return false;
+  }
+
+  if (!characteristic->writeValue(payload, length, true)) {
+    errorOut = String("BLE ") + label + " write failed";
+    return false;
+  }
+
+  errorOut = "";
+  return true;
+}
+
 bool waitForEncryptedConnection(NimBLEClient* client, uint32_t timeoutMs, String& errorOut) {
   if (client == nullptr || !client->isConnected()) {
     errorOut = "BLE not connected";
@@ -994,6 +1056,60 @@ bool RicohBleClient::readPowerState(RicohCameraPowerState& state) {
   return true;
 }
 
+bool RicohBleClient::readOperationMode(RicohCameraOperationMode& mode) {
+  NimBLEClient* client = static_cast<NimBLEClient*>(_client);
+  mode = RicohCameraOperationMode::Unknown;
+  if (!isConnected() || client == nullptr) {
+    _lastError = "BLE not connected";
+    return false;
+  }
+
+  NimBLERemoteService* cameraService = client->getService(NimBLEUUID(RICOH_BLE_CAMERA_SERVICE_UUID));
+  if (cameraService == nullptr) {
+    _lastError = "BLE camera service unavailable";
+    return false;
+  }
+
+  NimBLERemoteCharacteristic* operationMode =
+      cameraService->getCharacteristic(NimBLEUUID(RICOH_BLE_OPERATION_MODE_UUID));
+  if (operationMode == nullptr || !operationMode->canRead()) {
+    _lastError = "BLE operation mode unavailable";
+    return false;
+  }
+
+  NimBLEAttValue value = operationMode->readValue();
+  if (value.length() == 0) {
+    _lastError = "BLE operation mode read empty";
+    return false;
+  }
+
+  const uint8_t code = value.data()[0];
+  switch (code) {
+    case 0x00:
+      mode = RicohCameraOperationMode::Capture;
+      break;
+    case 0x01:
+      mode = RicohCameraOperationMode::Playback;
+      break;
+    case 0x02:
+      mode = RicohCameraOperationMode::BleStartup;
+      break;
+    case 0x03:
+      mode = RicohCameraOperationMode::Other;
+      break;
+    case 0x04:
+      mode = RicohCameraOperationMode::PowerOffTransfer;
+      break;
+    default:
+      mode = RicohCameraOperationMode::Unknown;
+      break;
+  }
+
+  Serial.printf("BLE: operation mode read value=0x%02X state=%s\n", code, ricohOperationModeName(mode));
+  _lastError = "";
+  return true;
+}
+
 bool RicohBleClient::enablePowerStateNotify() {
   NimBLEClient* client = static_cast<NimBLEClient*>(_client);
   if (!isConnected() || client == nullptr) {
@@ -1076,44 +1192,43 @@ bool RicohBleClient::shoot(bool autofocus) {
     return false;
   }
 
-  const uint8_t focusPayload[] = {0x01};
-  const uint8_t releasePayload[] = {0x00};
-  const uint8_t shootPayload[] = {static_cast<uint8_t>(autofocus ? 0x02 : 0x01)};
-  bool needsRelease = false;
-
-  auto writeShutter = [&](const uint8_t* payload, size_t length, String& err) -> bool {
-    return writeHandleWithResponse(client, RICOH_BLE_GR4_SHUTTER_HANDLE, payload, length, err);
-  };
-
+  // RICOH GR uses a single capture operation instead of a generic
+  // half-press/full-press/release characteristic.  Keep this aligned with the
+  // furble Ricoh implementation: ShootingFlavor=IMMEDIATE, then
+  // OperationRequest={START, AF|NO_AF}.  There is no release write.
+  NimBLERemoteService* shootingService = client->getService(NimBLEUUID(RICOH_BLE_SHOOTING_SERVICE_UUID));
   String err;
-  if (!writeShutter(focusPayload, sizeof(focusPayload), err)) {
-    _lastError = String("BLE shutter focus failed: ") + err;
+  NimBLERemoteCharacteristic* shootingFlavor =
+      writableCharacteristic(shootingService, RICOH_BLE_SHOOTING_FLAVOR_UUID, "ShootingFlavor", err);
+  if (shootingFlavor == nullptr) {
+    _lastError = err;
     return false;
   }
-  needsRelease = true;
-  delay(80);
-  yield();
 
-  if (!writeShutter(shootPayload, sizeof(shootPayload), err)) {
-    String releaseErr;
-    if (needsRelease && isConnected()) {
-      writeShutter(releasePayload, sizeof(releasePayload), releaseErr);
-    }
-    _lastError = String("BLE shutter shoot failed: ") + err;
-    if (releaseErr.length() > 0) {
-      _lastError += String("; release failed: ") + releaseErr;
-    }
+  NimBLERemoteCharacteristic* operationRequest =
+      writableCharacteristic(shootingService, RICOH_BLE_OPERATION_REQUEST_UUID, "OperationRequest", err);
+  if (operationRequest == nullptr) {
+    _lastError = err;
     return false;
   }
-  delay(80);
-  yield();
 
-  if (!writeShutter(releasePayload, sizeof(releasePayload), err)) {
-    _lastError = String("BLE shutter release failed: ") + err;
+  const uint8_t flavorPayload[] = {RICOH_SHOOTING_FLAVOR_IMMEDIATE};
+  if (!writeCharacteristicValue(shootingFlavor, flavorPayload, sizeof(flavorPayload), "ShootingFlavor", err)) {
+    _lastError = err;
+    return false;
+  }
+
+  const uint8_t operationParam = autofocus ? RICOH_OPERATION_PARAM_AF : RICOH_OPERATION_PARAM_NO_AF;
+  const uint8_t operationPayload[] = {RICOH_OPERATION_START, operationParam};
+  if (!writeCharacteristicValue(operationRequest, operationPayload, sizeof(operationPayload), "OperationRequest", err)) {
+    _lastError = err;
     return false;
   }
 
   _lastError = "";
+  Serial.printf("BLE: Ricoh shutter OperationRequest START param=%u autofocus=%d\n",
+                static_cast<unsigned>(operationParam),
+                autofocus ? 1 : 0);
   return true;
 }
 
