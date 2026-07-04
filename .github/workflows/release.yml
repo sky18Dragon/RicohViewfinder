@@ -1,0 +1,131 @@
+name: Release Firmware
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  PIO_ENV: m5stack-sticks3
+  PRODUCT_NAME: RicohViewfinder
+  CHIP: esp32s3
+
+jobs:
+  build-release:
+    name: Build and upload firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install PlatformIO and esptool
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio==6.1.18 esptool
+
+      - name: Build firmware
+        run: |
+          platformio run -e $PIO_ENV
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${GITHUB_REF_NAME}"
+          BUILD_DIR=".pio/build/${PIO_ENV}"
+          OUT_DIR="dist"
+
+          mkdir -p "$OUT_DIR"
+
+          cp "$BUILD_DIR/firmware.bin" "$OUT_DIR/${PRODUCT_NAME}-${PIO_ENV}-${VERSION}.bin"
+          cp "$BUILD_DIR/bootloader.bin" "$OUT_DIR/${PRODUCT_NAME}-bootloader-${PIO_ENV}-${VERSION}.bin"
+          cp "$BUILD_DIR/partitions.bin" "$OUT_DIR/${PRODUCT_NAME}-partitions-${PIO_ENV}-${VERSION}.bin"
+
+          if [ -f "$BUILD_DIR/boot_app0.bin" ]; then
+            cp "$BUILD_DIR/boot_app0.bin" "$OUT_DIR/${PRODUCT_NAME}-boot_app0-${PIO_ENV}-${VERSION}.bin"
+
+            esptool.py --chip "$CHIP" merge_bin \
+              -o "$OUT_DIR/${PRODUCT_NAME}-${PIO_ENV}-${VERSION}-merged.bin" \
+              0x0000 "$BUILD_DIR/bootloader.bin" \
+              0x8000 "$BUILD_DIR/partitions.bin" \
+              0xe000 "$BUILD_DIR/boot_app0.bin" \
+              0x10000 "$BUILD_DIR/firmware.bin"
+          else
+            esptool.py --chip "$CHIP" merge_bin \
+              -o "$OUT_DIR/${PRODUCT_NAME}-${PIO_ENV}-${VERSION}-merged.bin" \
+              0x0000 "$BUILD_DIR/bootloader.bin" \
+              0x8000 "$BUILD_DIR/partitions.bin" \
+              0x10000 "$BUILD_DIR/firmware.bin"
+          fi
+
+          cat > "$OUT_DIR/FLASHING.md" <<'EOF'
+          # RicohViewfinder 固件烧录说明
+
+          ## 推荐：首次安装使用 merged 固件
+
+          下载：
+
+          - RicohViewfinder-m5stack-sticks3-版本号-merged.bin
+
+          使用 esptool 烧录：
+
+          ```bash
+          esptool.py --chip esp32s3 --baud 921600 write_flash 0x0000 RicohViewfinder-m5stack-sticks3-版本号-merged.bin
+          ```
+
+          ## 高级：分文件烧录
+
+          如果你下载的是 bootloader / partitions / boot_app0 / firmware 分文件，可以按下面地址烧录：
+
+          ```bash
+          esptool.py --chip esp32s3 --baud 921600 write_flash \
+            0x0000 bootloader.bin \
+            0x8000 partitions.bin \
+            0xe000 boot_app0.bin \
+            0x10000 firmware.bin
+          ```
+
+          如果 Release 中没有 boot_app0.bin，则跳过 0xe000 这一项。
+          EOF
+
+          cd "$OUT_DIR"
+          sha256sum *.bin > sha256sum.txt
+          ls -lh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RicohViewfinder-${{ github.ref_name }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: RicohViewfinder ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/*.bin
+            dist/sha256sum.txt
+            dist/FLASHING.md
