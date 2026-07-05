@@ -1,6 +1,13 @@
-# RICOH GR StickS3 Remote Viewfinder
+# RICOH GR StickS3 Remote Viewfinder (Deprecated)
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/thinkerzhang)
+
+> [!CAUTION]
+> **This project is deprecated and is no longer recommended as a RICOH GR real-time viewfinder.**
+>
+> Real-device testing showed that maintaining StickS3 live view requires the camera to keep Bluetooth/BLE and Wi-Fi LiveView enabled for a long time. In that state, the RICOH camera heats up significantly, so this firmware is not practical as a stable, safe continuous viewfinder. This repository is kept only as a historical reference.
+>
+> Please use the new project instead: **[RICOH-GR-Live-View-Shooting](https://github.com/sky18Dragon/RICOH-GR-Live-View-Shooting)**.
 
 Firmware for running RICOH GR wireless live view and BLE remote shutter on the M5Stack StickS3.
 
@@ -10,7 +17,7 @@ The firmware uses **BLE as the entry point for discovery, pairing, wake control,
 
 ---
 
-## Current Capabilities
+## Historical Implementation
 
 - **BLE-first connection**: On first use, scans for `GR_` / RICOH devices and performs secure pairing. On later boots, fast direct reconnect uses the saved BLE address, address type, and bonded state from NVS before falling back to scanning.
 - **Power-off / standby guard**: After a StickS3 reboot, the firmware may still connect to a camera that is in BLE standby. It reads both RICOH Power State and Operation Mode before Wi-Fi ON; `BLE_STARTUP` and `POWER_OFF_TRANSFER` block automatic Wi-Fi wake.
@@ -25,12 +32,12 @@ The firmware uses **BLE as the entry point for discovery, pairing, wake control,
 
 ## Camera Compatibility Status
 
-The current code and protocol parameters have been verified on **RICOH GR IV HDF** only.
+The code and protocol parameters were historically verified on **RICOH GR IV HDF** only. However, because long-running BLE + Wi-Fi LiveView causes significant camera heat, this project is still deprecated and is no longer recommended as a continuous viewfinder.
 
 | Camera | Status | Notes |
 | --- | --- | --- |
-| RICOH GR IV HDF | Verified working | Primary development and test camera |
-| RICOH GR IV series | Expected to work | Same-generation BLE / Wi-Fi / HTTP LiveView protocol is expected to be compatible, but real-device confirmation is still recommended |
+| RICOH GR IV HDF | Historically verified; project deprecated | Primary development and test camera; no longer recommended as a continuous viewfinder |
+| RICOH GR IV series | Expected protocol compatibility; project deprecated | Same-generation BLE / Wi-Fi / HTTP LiveView protocol is expected to be compatible, but this viewfinder approach is no longer recommended |
 | RICOH GR III / GR IIIx | Not currently supported | Protocol and behavior differ from the current GR IV implementation |
 | RICOH GR II | Not currently supported | Does not support the GR IV BLE-first flow used by this firmware |
 
