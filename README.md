@@ -1,7 +1,5 @@
 # RICOH GR StickS3 Remote Viewfinder (Deprecated)
 
-[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/thinkerzhang)
-
 > [!CAUTION]
 > **本项目已废弃，不再建议作为 RICOH GR 实时取景器使用。**
 >
