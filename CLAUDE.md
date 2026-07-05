@@ -1,10 +1,12 @@
-# CLAUDE.md — RICOH GR StickS3 Remote Viewfinder
+# CLAUDE.md — RICOH GR StickS3 Remote Viewfinder (Deprecated)
 
 > 项目 AI 上下文索引（根级简明）。模块级详尽文档见 [`src/CLAUDE.md`](src/CLAUDE.md)。
 >
 > 生成时间：2026-06-29 17:19:32 CST ｜ 工具：`/ccg:init`
 
 ## 一句话概述
+
+> **项目状态：已废弃。** 实机验证发现，RICOH 相机长时间同时开启 Bluetooth/BLE 和 Wi-Fi LiveView 会明显发热，无法稳定、安全地作为持续取景器使用。后续应指向新项目：[RICOH-GR-Live-View-Shooting](https://github.com/sky18Dragon/RICOH-GR-Live-View-Shooting)。
 
 M5Stack StickS3（ESP32-S3）固件：以 **BLE 为唯一在线入口**识别并连接 RICOH GR 相机，经 BLE 临时唤醒相机 Wi-Fi 并读取动态 Wi-Fi 凭据，再通过 HTTP LiveView 在屏幕上显示实时 MJPEG 预览，并支持遥控快门。
 

@@ -2,6 +2,8 @@
 
 [← 根目录 CLAUDE.md](../CLAUDE.md) ｜ 生成时间：2026-06-29 17:19:32 CST
 
+> **项目状态：已废弃。** RICOH 相机长时间同时开启 Bluetooth/BLE 和 Wi-Fi LiveView 会明显发热，无法稳定、安全地作为持续取景器使用。新项目见 [RICOH-GR-Live-View-Shooting](https://github.com/sky18Dragon/RICOH-GR-Live-View-Shooting)。
+
 `src/` 扁平存放全部固件源码（10 个 `.cpp`/`.h` 对 + `config.h`，约 3711 行）。本文按层记录每个模块的职责、对外接口、依赖与实现要点。
 
 ## 文件清单

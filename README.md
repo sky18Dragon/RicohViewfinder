@@ -1,6 +1,13 @@
-# RICOH GR StickS3 Remote Viewfinder
+# RICOH GR StickS3 Remote Viewfinder (Deprecated)
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/thinkerzhang)
+
+> [!CAUTION]
+> **本项目已废弃，不再建议作为 RICOH GR 实时取景器使用。**
+>
+> 实机验证发现：为了维持 StickS3 实时取景，相机需要长时间同时保持 Bluetooth/BLE 和 Wi-Fi LiveView 开启；在这种状态下，RICOH 相机会出现明显发热，无法稳定、安全地作为持续取景器使用。因此本项目停止作为取景器固件继续推进，仓库内容仅保留作历史参考。
+>
+> 请转到新项目：**[RICOH-GR-Live-View-Shooting](https://github.com/sky18Dragon/RICOH-GR-Live-View-Shooting)**。
 
 运行在 M5Stack StickS3 上的 RICOH GR 无线实时取景和 BLE 遥控快门固件。
 
@@ -10,7 +17,7 @@
 
 ---
 
-## 当前能力
+## 历史实现能力
 
 - **BLE 优先连接**：首次使用时扫描 `GR_` / RICOH 设备并完成安全配对；后续启动优先使用 NVS 中保存的 BLE 地址、地址类型和 bonded 状态进行快速直连，失败后回退扫描。
 - **关机/待机保护**：StickS3 重启后即使能连上相机 BLE，也会先读取 RICOH Power State 和 Operation Mode；当相机处于 `BLE_STARTUP` / `POWER_OFF_TRANSFER` 等待机广播模式时，不会自动发送 Wi-Fi ON，避免把关机状态下的相机唤醒。
@@ -25,12 +32,12 @@
 
 ## 相机兼容性状态
 
-当前代码和协议参数只在 **RICOH GR IV HDF** 上完成实机验证。
+当前代码和协议参数历史上只在 **RICOH GR IV HDF** 上完成协议与功能验证；但由于长时间 BLE + Wi-Fi LiveView 会导致相机明显发热，本项目仍已废弃，不再建议作为持续取景器使用。
 
 | 相机 | 状态 | 说明 |
 | --- | --- | --- |
-| RICOH GR IV HDF | 已验证可用 | 当前主要开发和测试机型 |
-| RICOH GR IV 系列 | 理论可用 | 同代 BLE / Wi-Fi / HTTP LiveView 协议预计兼容，但仍建议实机确认 |
+| RICOH GR IV HDF | 历史验证通过，项目已废弃 | 当前主要开发和测试机型；不再建议作为持续取景器使用 |
+| RICOH GR IV 系列 | 理论兼容，项目已废弃 | 同代 BLE / Wi-Fi / HTTP LiveView 协议预计兼容，但不再建议继续此取景器方案 |
 | RICOH GR III / GR IIIx | 当前不可用 | 与当前 GR IV 实现存在协议/行为差异，不作为本固件支持目标 |
 | RICOH GR II | 当前不可用 | 不支持当前固件使用的 GR IV BLE-first 流程 |
 
