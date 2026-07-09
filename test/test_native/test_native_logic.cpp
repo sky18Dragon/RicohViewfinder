@@ -5,6 +5,7 @@
 
 #include <unity.h>
 
+#include "background_image.h"
 #include "ble_reconnect_policy.h"
 #include "camera_identity.h"
 #include "mjpeg_stream.h"
@@ -148,6 +149,18 @@ void testRequiresBleAddressAndAddressTypeForDirectReconnect() {
   TEST_ASSERT_FALSE(hasDirectBleReconnectIdentity(nullptr, true));
 }
 
+void testBackgroundImageDataIsAvailable() {
+  TEST_ASSERT_EQUAL_UINT16(240, BACKGROUND_IMAGE_WIDTH);
+  TEST_ASSERT_EQUAL_UINT16(135, BACKGROUND_IMAGE_HEIGHT);
+  TEST_ASSERT_EQUAL_HEX16(0x1082, BACKGROUND_IMAGE_FALLBACK_RGB565);
+  TEST_ASSERT_NOT_NULL(backgroundImageData());
+  TEST_ASSERT_EQUAL_HEX16(backgroundImageData()[0], backgroundImagePixel(0, 0));
+  TEST_ASSERT_EQUAL_HEX16(backgroundImageData()[(BACKGROUND_IMAGE_WIDTH * BACKGROUND_IMAGE_HEIGHT) - 1],
+                         backgroundImagePixel(BACKGROUND_IMAGE_WIDTH - 1, BACKGROUND_IMAGE_HEIGHT - 1));
+  TEST_ASSERT_TRUE(backgroundImagePixel(BACKGROUND_IMAGE_WIDTH / 2, BACKGROUND_IMAGE_HEIGHT / 2) !=
+                   BACKGROUND_IMAGE_FALLBACK_RGB565);
+}
+
 }  // namespace
 
 int main() {
@@ -161,5 +174,6 @@ int main() {
   RUN_TEST(testLeavesNonNumericRicohWifiSsidUnchanged);
   RUN_TEST(testRejectsNonRicohWifiSsidForBleName);
   RUN_TEST(testRequiresBleAddressAndAddressTypeForDirectReconnect);
+  RUN_TEST(testBackgroundImageDataIsAvailable);
   return UNITY_END();
 }

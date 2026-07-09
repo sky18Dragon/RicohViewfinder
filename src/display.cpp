@@ -1,13 +1,16 @@
 #include "display.h"
 
+#include "background_image.h"
+
 namespace {
 constexpr uint16_t COLOR_WHITE = 0xFFFF;
+constexpr uint16_t COLOR_BLACK = 0x0000;
 constexpr uint16_t COLOR_RED = 0xF800;
 constexpr uint16_t COLOR_GREEN = 0x07E0;
 constexpr uint16_t COLOR_YELLOW = 0xFFE0;
 
 // RICOH styling additions
-constexpr uint16_t COLOR_BG = 0x1082;     // Matte Charcoal Black (#121212)
+constexpr uint16_t COLOR_BG = BACKGROUND_IMAGE_FALLBACK_RGB565;  // Matte Charcoal Black (#121212)
 constexpr uint16_t COLOR_AMBER = 0xFD20;  // Signature Amber Orange (#FF9500)
 constexpr uint16_t COLOR_SLATE = 0x2104;  // Slate Gray (#212121)
 constexpr uint16_t COLOR_GRAY = 0x7BEF;   // Mid Gray (#7B7B7B)
@@ -53,6 +56,68 @@ bool statusContains(const char* line1,
            containsIgnoreCase(line4, needle);
 }
 
+int16_t textWidth(const char* text, uint8_t textSize) {
+    return static_cast<int16_t>(strlen(safeText(text)) * 6 * textSize);
+}
+
+void drawTextAt(M5Canvas& canvas, const char* text, int16_t x, int16_t y, uint8_t textSize, uint16_t color) {
+    canvas.setTextSize(textSize);
+    canvas.setTextColor(color);
+    canvas.setCursor(x, y);
+    canvas.print(safeText(text));
+}
+
+void drawCenteredText(M5Canvas& canvas,
+                      const char* text,
+                      int16_t screenW,
+                      int16_t y,
+                      uint8_t textSize,
+                      uint16_t color) {
+    drawTextAt(canvas, text, static_cast<int16_t>((screenW - textWidth(text, textSize)) / 2), y, textSize, color);
+}
+
+void drawOutlinedText(M5Canvas& canvas,
+                      const char* text,
+                      int16_t x,
+                      int16_t y,
+                      uint8_t textSize,
+                      uint16_t fill,
+                      uint16_t outline,
+                      int8_t radius) {
+    canvas.setTextSize(textSize);
+    canvas.setTextColor(outline);
+    for (int8_t dy = static_cast<int8_t>(-radius); dy <= radius; ++dy) {
+        for (int8_t dx = static_cast<int8_t>(-radius); dx <= radius; ++dx) {
+            if (dx == 0 && dy == 0) {
+                continue;
+            }
+            canvas.setCursor(x + dx, y + dy);
+            canvas.print(safeText(text));
+        }
+    }
+
+    canvas.setTextColor(fill);
+    canvas.setCursor(x, y);
+    canvas.print(safeText(text));
+}
+
+void drawCenteredOutlinedText(M5Canvas& canvas,
+                              const char* text,
+                              int16_t screenW,
+                              int16_t y,
+                              uint8_t textSize,
+                              uint16_t fill,
+                              uint16_t outline,
+                              int8_t radius) {
+    drawOutlinedText(canvas,
+                     text,
+                     static_cast<int16_t>((screenW - textWidth(text, textSize)) / 2),
+                     y,
+                     textSize,
+                     fill,
+                     outline,
+                     radius);
+}
 
 }  // namespace
 
@@ -89,45 +154,19 @@ bool DisplayUi::begin() {
 void DisplayUi::showBoot(const char* message) {
     clear(COLOR_BG);
 
-    // Large stylish GR logo in signature amber
-    _canvas.setTextColor(COLOR_AMBER, COLOR_BG);
-    _canvas.setTextSize(3);
-    _canvas.setCursor(102, 20);
-    _canvas.print("GR");
-
-    // Subtitle
-    _canvas.setTextSize(1);
-    _canvas.setTextColor(COLOR_WHITE, COLOR_BG);
-    _canvas.setCursor(84, 52);
-    _canvas.print("VIEWFINDER");
-
-    // Glowing progress bar outline
-    _canvas.drawRoundRect(40, 72, 160, 6, 3, COLOR_SLATE);
-    _canvas.fillRoundRect(42, 74, 60, 2, 1, COLOR_AMBER);
-
-    // Boot status message
-    _canvas.setTextColor(COLOR_GRAY, COLOR_BG);
     const char* msg = safeText(message, "Booting...");
-    int msgLen = strlen(msg);
-    _canvas.setCursor((240 - (msgLen * 6)) / 2, 88);
-    _canvas.print(msg);
+    const uint8_t msgSize = textWidth(msg, 2) <= (_width - 8) ? 2 : 1;
+    const int16_t msgY = msgSize == 2 ? 59 : 64;
 
-    // Footer divider and hotkeys
-    _canvas.drawFastHLine(20, _height - 24, 200, COLOR_SLATE);
-    _canvas.setCursor(33, _height - 16);
-    _canvas.print("BtnA: shutter / wake");
+    drawCenteredText(_canvas, "GR VIEWFINDER", _width, 2, 1, COLOR_SLATE);
+    drawCenteredOutlinedText(_canvas, msg, _width, msgY, msgSize, COLOR_AMBER, COLOR_BLACK, 2);
+    drawCenteredOutlinedText(_canvas, "BtnA: shutter / wake", _width, _height - 11, 1, COLOR_BLACK, COLOR_WHITE, 1);
 
     pushCanvas();
 }
 
 void DisplayUi::showStatus(const char* line1, const char* line2, const char* line3, const char* line4) {
     clear(COLOR_BG);
-
-    _canvas.drawFastHLine(10, 24, _width - 20, COLOR_SLATE);
-    _canvas.setTextSize(1);
-    _canvas.setTextColor(COLOR_AMBER, COLOR_BG);
-    _canvas.setCursor(10, 8);
-    _canvas.print("GR VIEWFINDER");
 
     drawStatusLines(line1, line2, line3, line4);
 
@@ -144,31 +183,15 @@ void DisplayUi::showStatus(const String& line1, const String& line2, const Strin
 void DisplayUi::showError(const char* message, const char* detail) {
     clear(COLOR_BG);
 
-    // Header
-    _canvas.drawFastHLine(10, 24, _width - 20, COLOR_SLATE);
-    _canvas.setTextSize(1);
-    _canvas.setTextColor(COLOR_RED, COLOR_BG);
-    _canvas.setCursor(10, 8);
-    _canvas.print("SYSTEM ERROR");
-
-    // Outlined error card
-    _canvas.drawRoundRect(10, 32, 220, 78, 4, COLOR_RED);
-
-    _canvas.setTextColor(COLOR_RED, COLOR_BG);
-    _canvas.setCursor(20, 42);
-    _canvas.print(safeText(message, "Unknown error"));
+    drawCenteredText(_canvas, "GR VIEWFINDER", _width, 2, 1, COLOR_SLATE);
+    drawCenteredOutlinedText(_canvas, "SYSTEM ERROR", _width, 58, 2, COLOR_RED, COLOR_BLACK, 2);
+    drawCenteredOutlinedText(_canvas, safeText(message, "Unknown error"), _width, 84, 1, COLOR_RED, COLOR_BLACK, 1);
 
     if (detail != nullptr && detail[0] != '\0') {
-        _canvas.setTextColor(COLOR_WHITE, COLOR_BG);
-        _canvas.setCursor(20, 62);
-        _canvas.print(detail);
+        drawCenteredOutlinedText(_canvas, detail, _width, 98, 1, COLOR_BLACK, COLOR_WHITE, 1);
     }
 
-    // Footer action hint
-    _canvas.drawFastHLine(10, _height - 20, _width - 20, COLOR_SLATE);
-    _canvas.setTextColor(COLOR_WHITE, COLOR_BG);
-    _canvas.setCursor(50, _height - 14);
-    _canvas.print("Press BtnA to reconnect");
+    drawCenteredOutlinedText(_canvas, "Press Button to Restart", _width, _height - 11, 1, COLOR_BLACK, COLOR_WHITE, 1);
 
     pushCanvas();
 }
@@ -273,7 +296,21 @@ int16_t DisplayUi::height() const {
 }
 
 void DisplayUi::clear(uint16_t color) {
+    if (color == COLOR_BG) {
+        drawBackgroundImage();
+        return;
+    }
     _canvas.fillScreen(color);
+}
+
+void DisplayUi::drawBackgroundImage() {
+    if (_width != static_cast<int16_t>(BACKGROUND_IMAGE_WIDTH) ||
+        _height != static_cast<int16_t>(BACKGROUND_IMAGE_HEIGHT)) {
+        _canvas.fillScreen(COLOR_BG);
+        return;
+    }
+
+    _canvas.pushImage(0, 0, _width, _height, backgroundImageData());
 }
 
 void DisplayUi::drawStatusLines(const char* line1, const char* line2, const char* line3, const char* line4) {
@@ -290,44 +327,13 @@ void DisplayUi::drawStatusLines(const char* line1, const char* line2, const char
                              statusContains(s1, s2, s3, s4, "AUTO WAKE") ||
                              statusContains(s1, s2, s3, s4, "COOLDOWN");
 
-    const uint16_t accent = scanStopped ? COLOR_RED : COLOR_AMBER;
-    const char* topStatus = scanStopped ? "STOPPED" : "SCANNING";
     const char* title = scanStopped ? "SCAN STOPPED" : "SCANNING";
-    const char* subtitle = scanStopped ? "Restart StickS3" : "Searching RICOH GR";
-    const char* detail = scanStopped ? "Power off/on device" : "Keep camera nearby";
+    const char* action = scanStopped ? "Press Button to Restart" : "Searching RICOH GR";
+    const uint16_t titleColor = scanStopped ? COLOR_RED : COLOR_AMBER;
 
-    const int16_t labelW = static_cast<int16_t>(strlen(topStatus) * 6);
-    _canvas.setTextColor(accent, COLOR_BG);
-    _canvas.setCursor(_width - 10 - labelW, 8);
-    _canvas.print(topStatus);
-
-    _canvas.drawRoundRect(16, 36, _width - 32, 66, 8, accent);
-    _canvas.fillCircle(38, 68, 8, accent);
-    if (!scanStopped) {
-        _canvas.fillCircle(38, 68, 3, COLOR_BG);
-    } else {
-        _canvas.drawLine(34, 64, 42, 72, COLOR_BG);
-        _canvas.drawLine(42, 64, 34, 72, COLOR_BG);
-    }
-
-    _canvas.setTextSize(2);
-    _canvas.setTextColor(COLOR_WHITE, COLOR_BG);
-    _canvas.setCursor(58, 52);
-    _canvas.print(title);
-
-    _canvas.setTextSize(1);
-    _canvas.setTextColor(COLOR_GRAY, COLOR_BG);
-    _canvas.setCursor(58, 78);
-    _canvas.print(subtitle);
-
-    _canvas.drawFastHLine(10, _height - 24, _width - 20, COLOR_SLATE);
-    _canvas.setTextColor(scanStopped ? COLOR_RED : COLOR_GRAY, COLOR_BG);
-    _canvas.setCursor(10, _height - 16);
-    _canvas.print(detail);
-
-    _canvas.setTextColor(COLOR_GRAY, COLOR_BG);
-    _canvas.setCursor(138, _height - 16);
-    _canvas.print(scanStopped ? "Restart required" : "Scanning...");
+    drawCenteredText(_canvas, "GR VIEWFINDER", _width, 2, 1, COLOR_SLATE);
+    drawCenteredOutlinedText(_canvas, title, _width, 59, 2, titleColor, COLOR_BLACK, 2);
+    drawCenteredOutlinedText(_canvas, action, _width, _height - 11, 1, COLOR_BLACK, COLOR_WHITE, 1);
 }
 
 // Graphic helper to draw WiFi RSSI strength bars
