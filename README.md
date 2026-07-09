@@ -174,11 +174,20 @@ Button A 使用 `M5.BtnA.wasPressed()` 轮询；电源键同时使用 M5Unified 
 ## 构建、烧录和串口监视
 
 ```bash
-# 编译默认 m5stack-sticks3 环境
+# 编译默认 m5stack-sticks3 环境（旧默认界面）
 platformio run
+
+# 编译定制页面 1（兔子背景界面）
+platformio run -e m5stack-sticks3-bunny-ui
+
+# 显式编译旧默认界面
+platformio run -e m5stack-sticks3-default-ui
 
 # 烧录
 platformio run --target upload
+
+# 烧录定制页面 1
+platformio run -e m5stack-sticks3-bunny-ui --target upload
 
 # 指定串口烧录示例
 platformio run --target upload --upload-port COM6
@@ -192,7 +201,7 @@ platformio test -e native
 
 串口波特率：`115200`
 
-默认 PlatformIO 环境：`m5stack-sticks3`。目标硬件为 ESP32-S3 DevKitC-1 N8 / M5Stack StickS3，开启 PSRAM 相关编译选项。
+默认 PlatformIO 环境：`m5stack-sticks3`，不指定 `-e` 时使用旧默认界面。指定 `-e m5stack-sticks3-bunny-ui` 时编译定制页面 1。目标硬件为 ESP32-S3 DevKitC-1 N8 / M5Stack StickS3，开启 PSRAM 相关编译选项。
 
 ---
 

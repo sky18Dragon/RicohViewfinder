@@ -176,11 +176,20 @@ Connection strategy:
 ## Build, Flash, and Monitor
 
 ```bash
-# Build the default m5stack-sticks3 environment
+# Build the default m5stack-sticks3 environment (legacy default UI)
 platformio run
+
+# Build custom page 1 (bunny background UI)
+platformio run -e m5stack-sticks3-bunny-ui
+
+# Explicitly build the legacy default UI
+platformio run -e m5stack-sticks3-default-ui
 
 # Upload
 platformio run --target upload
+
+# Upload custom page 1
+platformio run -e m5stack-sticks3-bunny-ui --target upload
 
 # Upload to a specific serial port example
 platformio run --target upload --upload-port COM6
@@ -194,7 +203,7 @@ platformio test -e native
 
 Serial baud rate: `115200`
 
-The default PlatformIO environment is `m5stack-sticks3`. The target is ESP32-S3 DevKitC-1 N8 / M5Stack StickS3 with PSRAM-related build flags enabled.
+The default PlatformIO environment is `m5stack-sticks3`; when no `-e` option is specified, the firmware uses the legacy default UI. Use `-e m5stack-sticks3-bunny-ui` to build custom page 1. The target is ESP32-S3 DevKitC-1 N8 / M5Stack StickS3 with PSRAM-related build flags enabled.
 
 ---
 
